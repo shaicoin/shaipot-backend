@@ -15,7 +15,7 @@ function extractBlockHexToNBits(blockData) {
 }
 
 function adjustTargetForDifficulty(difficulty) {
-    const maxTarget = new BN('007fffff00000000000000000000000000000000000000000000000000000000', 16);
+    const maxTarget = new BN('000007fffff00000000000000000000000000000000000000000000000000000', 16);
     const adjustedTarget = maxTarget.div(new BN(Math.round(difficulty)));
     if (adjustedTarget.gt(maxTarget)) {
         return maxTarget.toString(16).padStart(64, '0');
