@@ -36,6 +36,10 @@ const generateJob = (ws, block_data) => {
 function verifyHamiltonianCycle(graph, path) {
     const USHRT_MAX = 65535;
 
+    if (path[0] !== 0) {
+        return false;
+    }
+    
     let path_size = path.indexOf(USHRT_MAX);
     if (path_size === -1) {
         path_size = path.length;
