@@ -15,7 +15,7 @@ function extractBlockHexToNBits(blockData) {
 }
 
 function adjustTargetForDifficulty(difficulty) {
-    const maxTarget = new BN('007fffff00000000000000000000000000000000000000000000000000000000', 16);
+    const maxTarget = new BN('000007fffff00000000000000000000000000000000000000000000000000000', 16);
     const adjustedTarget = maxTarget.div(new BN(Math.round(difficulty)));
     if (adjustedTarget.gt(maxTarget)) {
         return maxTarget.toString(16).padStart(64, '0');
@@ -36,6 +36,10 @@ const generateJob = (ws, block_data) => {
 function verifyHamiltonianCycle(graph, path) {
     const USHRT_MAX = 65535;
 
+    if (path[0] !== 0) {
+        return false;
+    }
+    
     let path_size = path.indexOf(USHRT_MAX);
     if (path_size === -1) {
         path_size = path.length;
