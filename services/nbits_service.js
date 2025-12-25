@@ -58,7 +58,7 @@ module.exports = {
 
     getDifficultyForShare: (shareNBits) => {
         const shareTarget = _nBitsToTarget(shareNBits);
-        const difficulty = maxTarget.div(shareTarget);
+        const difficulty = maxTarget.div(shareTarget) * 8;
         return Number(difficulty.toString());
     }
 }

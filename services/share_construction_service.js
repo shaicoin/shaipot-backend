@@ -22,7 +22,7 @@ function adjustTargetForDifficulty(difficulty, networkNBits) {
         adjustedTarget = baseTarget;
     }
     
-    if (adjustedTarget.gt(networkTarget)) {
+    if (adjustedTarget.lt(networkTarget)) {
         adjustedTarget = networkTarget;
     }
 

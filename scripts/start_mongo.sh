@@ -20,8 +20,11 @@ download_mongodb() {
     	"20.04")
         	DOWNLOAD_URL="https://fastdl.mongodb.org/linux/mongodb-linux-x86_64-ubuntu2004-$MONGO_VERSION.tgz"
         	;;
-    	"22.04"|"24.10")
+    	"22.04")
         	DOWNLOAD_URL="https://fastdl.mongodb.org/linux/mongodb-linux-x86_64-ubuntu2204-$MONGO_VERSION.tgz"
+       		;;
+    	"24.04"|"24.10")
+        	DOWNLOAD_URL="https://fastdl.mongodb.org/linux/mongodb-linux-x86_64-ubuntu2404-$MONGO_VERSION.tgz"
        		;;
     	*)
         	echo "Unsupported Ubuntu version: $UBUNTU_VERSION"

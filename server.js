@@ -5,7 +5,7 @@ global.totalMiners = 0
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { startMiningService, shutdownMiningService } = require('./services/mining_service');
-const { shutdownShaicoinService } = require('./services/shaicoin_service');
+const { shutdownShaicoinService, getRecentBlocks } = require('./services/shaicoin_service');
 const { calculatePoolHashrate, getMinerBalance, getRecentShares, shutdownDB } = require('./services/db_service');
 const { withdraw_threshold, fee_percentage_outof1000, pool_port, web_port, pool_mining_address, pool_connection } = require('./config.json')
 const app = express();
@@ -93,14 +93,24 @@ app.get('/miner', async (req, res) => {
 
 app.get('/recent-shares', async (req, res) => {
     try {
-        const requestedLimit = parseInt(req.query.limit) || 20;
-        const limit = Math.min(requestedLimit, 50);
+        const limit = parseInt(req.query.limit) || 20;
         const address = req.query.address;
         const shares = await getRecentShares(limit, address);
         res.json(shares);
     } catch (error) {
         console.error('Error retrieving recent shares:', error);
         res.status(500).json({ error: 'Error retrieving recent shares' });
+    }
+});
+
+app.get('/recent-blocks', async (req, res) => {
+    try {
+        const limit = Math.min(parseInt(req.query.limit) || 20, 200);
+        const blocks = await getRecentBlocks(limit);
+        res.json(blocks);
+    } catch (error) {
+        console.error('Error retrieving recent blocks:', error);
+        res.status(500).json({ error: 'Error retrieving recent blocks' });
     }
 });
 

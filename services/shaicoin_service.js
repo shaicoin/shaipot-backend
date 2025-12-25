@@ -399,6 +399,46 @@ async function submitBlock(rawBlockHex) {
     }
 }
 
+async function getRecentBlocks(count = 10) {
+    try {
+        const blockchainInfo = await rpcCall('getblockchaininfo');
+        const currentHeight = blockchainInfo.blocks;
+        const blocks = [];
+        for (let i = 0; i < count && currentHeight - i >= 0; i++) {
+            const height = currentHeight - i;
+            const blockHash = await rpcCall('getblockhash', [height]);
+            const block = await rpcCall('getblock', [blockHash]);
+            let minerAddress = 'Unknown';
+            if (block.tx && block.tx.length > 0) {
+                try {
+                    const coinbaseTx = await rpcCall('getrawtransaction', [block.tx[0], true]);
+                    if (coinbaseTx.vout && coinbaseTx.vout.length > 0) {
+                        const vout = coinbaseTx.vout[0];
+                        if (vout.scriptPubKey && vout.scriptPubKey.address) {
+                            minerAddress = vout.scriptPubKey.address;
+                        } else if (vout.scriptPubKey && vout.scriptPubKey.addresses && vout.scriptPubKey.addresses.length > 0) {
+                            minerAddress = vout.scriptPubKey.addresses[0];
+                        }
+                    }
+                } catch {}
+            }
+            blocks.push({
+                height,
+                hash: block.hash,
+                time: block.time,
+                miner: minerAddress,
+                txCount: block.nTx || (block.tx ? block.tx.length : 0),
+                size: block.size,
+                difficulty: block.difficulty
+            });
+        }
+        return blocks;
+    } catch (error) {
+        console.error('Error getting recent blocks:', error);
+        throw error;
+    }
+}
+
 const shutdownShaicoinService = () => {
     if (blockFetchInterval) {
         clearInterval(blockFetchInterval);
@@ -418,5 +458,6 @@ module.exports = {
     sendBalanceToMiners,
     submitBlock,
     validateAddress,
-    shutdownShaicoinService
+    shutdownShaicoinService,
+    getRecentBlocks
 };
