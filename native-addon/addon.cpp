@@ -411,6 +411,10 @@ public:
         obj.Set("nonce", nonce_);
         obj.Set("path", path_);
         
+        if (resultType_ == "share_rejected" && !shareResult_.error.empty()) {
+            obj.Set("reason", shareResult_.error);
+        }
+        
         if (resultType_ == "block_found") {
             obj.Set("blockHexUpdated", blockHexUpdated_);
         }
