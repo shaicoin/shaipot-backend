@@ -13,7 +13,6 @@ var balanceInterval = null
 var isShuttingDown = false
 
 const MAX_MESSAGE_SIZE = 10000
-const JOB_BUFFER_SIZE = 10
 
 const closeConnection = (ws, reason = 'Bye.') => {
     if (isShuttingDown) {
@@ -48,18 +47,11 @@ const sendJobToWS = (ws) => {
     if (ws.readyState === ws.OPEN && block_data && current_raw_block) {
         const job = generateJob(ws, block_data, current_raw_block.nbits);
         
-        if (!ws.jobBuffer) {
-            ws.jobBuffer = new Map();
-            ws.jobOrder = [];
-        }
-        
-        ws.jobBuffer.set(job.jobId, { data: job.data, target: job.target });
-        ws.jobOrder.push(job.jobId);
-        
-        while (ws.jobOrder.length > JOB_BUFFER_SIZE) {
-            const oldId = ws.jobOrder.shift();
-            ws.jobBuffer.delete(oldId);
-        }
+        ws.currentJob = {
+            jobId: job.jobId,
+            data: job.data,
+            target: job.target
+        };
         
         if (ws.minerId) {
             trackShareIssued(ws.minerId);
@@ -79,12 +71,6 @@ const distributeJobs = () => {
     }
 
     gwss.clients.forEach((ws) => {
-        if (ws.jobBuffer) {
-            ws.jobBuffer.clear();
-        }
-        if (ws.jobOrder) {
-            ws.jobOrder.length = 0;
-        }
         sendJobToWS(ws)
     });
 };
@@ -112,22 +98,12 @@ const handleShareSubmission = async (data, ws) => {
         }
     }
 
-    if (!ws.jobBuffer) {
-        ws.jobBuffer = new Map();
-        ws.jobOrder = [];
-    }
-
-    const jobIdStr = String(job_id);
-    const matchingJob = ws.jobBuffer.get(jobIdStr);
-    
-    if (!matchingJob) {
+    if (!ws.currentJob || String(ws.currentJob.jobId) !== String(job_id)) {
         ws.send(JSON.stringify({ type: 'rejected', message: 'Job ID mismatch' }));
         return;
     }
 
-    ws.jobBuffer.delete(jobIdStr);
-    const idx = ws.jobOrder.indexOf(jobIdStr);
-    if (idx > -1) ws.jobOrder.splice(idx, 1);
+    const matchingJob = ws.currentJob;
 
     try {
         var isAFrog = false
@@ -309,14 +285,7 @@ const startMiningService = async (port) => {
             if(ws.minerId) {
                 minerLeft(ws.minerId)
             }
-            if (ws.jobBuffer) {
-                ws.jobBuffer.clear();
-                ws.jobBuffer = null;
-            }
-            if (ws.jobOrder) {
-                ws.jobOrder.length = 0;
-                ws.jobOrder = null;
-            }
+            ws.currentJob = null;
             ws.difficulty = null;
             global.totalMiners -= 1;
             ws.removeAllListeners('message');

@@ -117,14 +117,6 @@ const periodicDifficultyCheck = (wss, sendJobCallback, blockNBits) => {
             currentDifficulty = Math.min(currentDifficulty, blockDifficulty);
             currentDifficulty = Math.max(currentDifficulty, 1);
             ws.difficulty = currentDifficulty;
-            
-            if (ws.jobBuffer) {
-                ws.jobBuffer.clear();
-            }
-            if (ws.jobOrder) {
-                ws.jobOrder.length = 0;
-            }
-            
             sendJobCallback(ws);
         }
     });
