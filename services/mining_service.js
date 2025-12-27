@@ -324,13 +324,13 @@ const startMiningService = async (port) => {
     
     staleCheckInterval = setInterval(() => {
         checkStaleShares(gwss, sendJobToWS);
-    }, 15000);
+    }, 10000);
 
     proactiveAdjustInterval = setInterval(() => {
         if (current_raw_block) {
             proactiveAdjustDifficulty(gwss, sendJobToWS, `0x${current_raw_block.nbits}`);
         }
-    }, 30000);
+    }, 15000);
 
     await shaicoin_service.sendBalanceToMiners()
     balanceInterval = setInterval(shaicoin_service.sendBalanceToMiners, 30 * 60 * 1000);

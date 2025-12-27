@@ -87,7 +87,9 @@ const checkStaleShares = (wss, sendJobCallback) => {
 
         if (timeSinceLastSubmission > SHARE_EXPIRATION_TIME && ws.readyState === ws.OPEN) {
             const currentDifficulty = ws.difficulty || 1.0;
-            ws.difficulty = Math.max(currentDifficulty * 0.5, 1);
+            const overdueRatio = timeSinceLastSubmission / TARGET_SHARE_TIME;
+            const adjustmentFactor = Math.max(1 / overdueRatio, 0.1);
+            ws.difficulty = Math.max(currentDifficulty * adjustmentFactor, 1);
             
             data.lastShareTimestamp = now;
             
@@ -123,29 +125,25 @@ const proactiveAdjustDifficulty = (wss, sendJobCallback, blockNBits) => {
         const timeSinceLastSubmission = (now - data.lastShareTimestamp) / 1000;
         const timeSinceLastProactive = (now - data.lastProactiveAdjust) / 1000;
 
-        if (timeSinceLastProactive < 25) {
-            return;
-        }
-
         let needsNewJob = false;
         let currentDifficulty = ws.difficulty || 1.0;
 
         if (timeSinceLastSubmission > PROACTIVE_CHECK_THRESHOLD) {
-            const expectedTime = TARGET_SHARE_TIME;
-            const ratio = timeSinceLastSubmission / expectedTime;
-            const adjustFactor = Math.min(ratio, 3);
-            currentDifficulty = currentDifficulty / adjustFactor;
+            const overdueRatio = timeSinceLastSubmission / TARGET_SHARE_TIME;
+            const adjustmentFactor = Math.max(1 / overdueRatio, 0.1);
+            currentDifficulty = currentDifficulty * adjustmentFactor;
+            data.lastShareTimestamp = now;
             needsNewJob = true;
-        } else if (data.rollingSubmissionTimes.length >= 3) {
+        } else if (timeSinceLastProactive >= 25 && data.rollingSubmissionTimes.length >= 3) {
             const avgTime = data.rollingSubmissionTimes.reduce((a, b) => a + b, 0) / data.rollingSubmissionTimes.length;
             
             if (avgTime < PROACTIVE_FAST_THRESHOLD) {
-                const ratio = TARGET_SHARE_TIME / avgTime;
-                currentDifficulty = currentDifficulty * Math.min(ratio, 2);
+                const adjustmentFactor = Math.min(TARGET_SHARE_TIME / avgTime, 3);
+                currentDifficulty = currentDifficulty * adjustmentFactor;
                 needsNewJob = true;
             } else if (avgTime > PROACTIVE_CHECK_THRESHOLD) {
-                const ratio = avgTime / TARGET_SHARE_TIME;
-                currentDifficulty = currentDifficulty / Math.min(ratio, 2);
+                const adjustmentFactor = Math.max(TARGET_SHARE_TIME / avgTime, 0.25);
+                currentDifficulty = currentDifficulty * adjustmentFactor;
                 needsNewJob = true;
             }
         }
