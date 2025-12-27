@@ -10,8 +10,17 @@ var block_data = null
 var gwss = null
 var staleCheckInterval = null
 var balanceInterval = null
+var isShuttingDown = false
 
 const MAX_MESSAGE_SIZE = 10000
+
+const closeConnection = (ws, reason = 'Bye.') => {
+    if (isShuttingDown) {
+        ws.close(1001, 'Server shutting down');
+    } else {
+        ws.close(1008, reason);
+    }
+};
 
 const getIpAddress = (ws) => {
     try {
@@ -78,7 +87,7 @@ const handleShareSubmission = async (data, ws) => {
         if(isValid) {
             ws.minerId = miner_id;
         } else {
-            ws.close(1008, 'Bye.');
+            closeConnection(ws);
             return;
         }
     }
@@ -135,7 +144,7 @@ const handleShareSubmission = async (data, ws) => {
                 const invalidCount = trackInvalidShare(miner_id);
                 ws.send(JSON.stringify({ type: 'rejected' }));
                 if (invalidCount >= 8) {
-                    ws.close(1008, 'Bye.');
+                    closeConnection(ws);
                 }
                 break;
 
@@ -160,7 +169,7 @@ const banAndDisconnectIp = async (ws) => {
             await banIp(ipAddress);
             gwss.clients.forEach((client) => {
                 if (getIpAddress(client) === ipAddress) {
-                    client.close(1008, 'Bye.');
+                    closeConnection(client);
                 }
             });
         }
@@ -182,12 +191,12 @@ const startMiningService = async (port) => {
         const ipAddress = getIpAddress(ws);
         
         if (ipAddress == null) {
-            ws.close(1008, 'Bye.');
+            closeConnection(ws);
             return;
         }
 
         if (await isIpBanned(ipAddress)) {
-            ws.close(1008, 'Bye.');
+            closeConnection(ws);
             return;
         }
 
@@ -238,7 +247,7 @@ const startMiningService = async (port) => {
 
         ws.on('message', async (message) => {
             if (message.length > MAX_MESSAGE_SIZE) {
-                ws.close(1008, 'Message too large');
+                closeConnection(ws, 'Message too large');
                 return;
             }
         
@@ -246,25 +255,25 @@ const startMiningService = async (port) => {
                 const data = JSON.parse(message);
                 if (data.type === 'submit') {
                     if (!isHexOrAlphabet(data.miner_id)) {
-                        ws.close(1008, 'Invalid data format');
+                        closeConnection(ws, 'Invalid data format');
                         return;
                     }
                     if (!isHexOrAlphabet(data.nonce)) {
-                        ws.close(1008, 'Invalid data format');
+                        closeConnection(ws, 'Invalid data format');
                         return;
                     }
                     if (!isHexOrAlphabet(data.job_id)) {
-                        ws.close(1008, 'Invalid data format');
+                        closeConnection(ws, 'Invalid data format');
                         return;
                     }
                     if (!isHexOrAlphabet(data.path)) {
-                        ws.close(1008, 'Invalid data format');
+                        closeConnection(ws, 'Invalid data format');
                         return;
                     }                    
                     await handleShareSubmission(data, ws);
                 }
             } catch (err) {
-                ws.close(1003, 'Invalid JSON');
+                closeConnection(ws, 'Invalid JSON');
             }
         });
 
@@ -304,6 +313,7 @@ const startMiningService = async (port) => {
 
 const shutdownMiningService = () => {
     console.log('Shutting down mining service...');
+    isShuttingDown = true;
     
     if (staleCheckInterval) {
         clearInterval(staleCheckInterval);
