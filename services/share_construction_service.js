@@ -14,7 +14,7 @@ function extractBlockHexToNBits(blockData) {
 }
 
 function adjustTargetForDifficulty(difficulty, networkNBits) {
-    const baseTarget = new BN('1fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', 16);
+    const baseTarget = new BN('07ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', 16);
     const networkTarget = nBitsToTarget(parseInt(networkNBits, 16));
     
     let adjustedTarget = baseTarget.div(new BN(Math.round(difficulty)));
