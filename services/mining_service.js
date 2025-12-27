@@ -99,6 +99,9 @@ const handleShareSubmission = async (data, ws) => {
     }
 
     if (!ws.currentJob || String(ws.currentJob.jobId) !== String(job_id)) {
+        if (global.debugLogging) {
+            console.log(`[DEBUG] Share rejected - miner: ${miner_id}, reason: job ID mismatch (got: ${job_id}, expected: ${ws.currentJob?.jobId || 'none'})`);
+        }
         ws.send(JSON.stringify({ type: 'rejected', message: 'Job ID mismatch' }));
         return;
     }
@@ -141,6 +144,9 @@ const handleShareSubmission = async (data, ws) => {
                 break;
 
             case 'share_rejected':
+                if (global.debugLogging) {
+                    console.log(`[DEBUG] Share rejected - miner: ${miner_id}, reason: ${result.reason || 'hash did not meet target'}, hash: ${result.hash || 'N/A'}`);
+                }
                 const invalidCount = trackInvalidShare(miner_id);
                 ws.send(JSON.stringify({ type: 'rejected' }));
                 if (invalidCount >= 8) {
@@ -149,6 +155,9 @@ const handleShareSubmission = async (data, ws) => {
                 break;
 
             case 'error':
+                if (global.debugLogging) {
+                    console.log(`[DEBUG] Share error - miner: ${miner_id}, error: ${result.message || 'unknown error'}`);
+                }
                 isAFrog = true
                 return;
         }
@@ -159,6 +168,9 @@ const handleShareSubmission = async (data, ws) => {
         sendJobToWS(ws);
     } catch (error) {
         if (isShuttingDown) return;
+        if (global.debugLogging) {
+            console.log(`[DEBUG] Share rejected - miner: ${miner_id}, reason: exception - ${error.message}`);
+        }
         console.error('Error processing share:', error);
         ws.send(JSON.stringify({ type: 'rejected' }));
     }
@@ -200,6 +212,10 @@ const startMiningService = async (port) => {
         if (await isIpBanned(ipAddress)) {
             closeConnection(ws);
             return;
+        }
+
+        if (global.debugLogging) {
+            console.log(`[DEBUG] Connection from IP: ${ipAddress}`);
         }
 
         ws.difficulty = 1;

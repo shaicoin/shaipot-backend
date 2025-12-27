@@ -1,6 +1,6 @@
 process.title = 'shaicoin_mining_pool'
 global.totalMiners = 0
-//global.minersToBan = global.minersToBan || new Set();
+global.debugLogging = process.argv.includes('--debug')
 
 const express = require('express');
 const rateLimit = require('express-rate-limit');
@@ -119,6 +119,9 @@ let isShuttingDown = false;
 
 httpServer = app.listen(PORT, async () => {
     console.log(`Web server is running on http://localhost:${PORT}`);
+    if (global.debugLogging) {
+        console.log('[DEBUG] Debug logging enabled');
+    }
     await startMiningService(pool_port);
 });
 
