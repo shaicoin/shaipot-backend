@@ -72,54 +72,49 @@ const trackShareIssued = (minerId) => {
     minerData[minerId].shareIssuedTimestamp = Date.now();
 };
 
-const periodicDifficultyCheck = (wss, sendJobCallback, blockNBits) => {
+const periodicDifficultyCheckForUser = (ws, sendJobCallback, blockNBits) => {
     if (!blockNBits) return;
+    if (ws.readyState !== ws.OPEN) return;
     
     const blockDifficulty = getDifficultyForShare(blockNBits);
     const now = Date.now();
 
-    wss.clients.forEach((ws) => {
-        if (ws.readyState !== ws.OPEN) {
-            return;
-        }
+    if (!ws.lastSubmitTime) {
+        ws.lastSubmitTime = now;
+    }
 
-        if (!ws.lastSubmitTime) {
-            ws.lastSubmitTime = now;
-        }
+    const timeSinceLastSubmit = (now - ws.lastSubmitTime) / 1000;
+    let needsNewJob = false;
+    let currentDifficulty = ws.difficulty || 1.0;
 
-        const timeSinceLastSubmit = (now - ws.lastSubmitTime) / 1000;
-        let needsNewJob = false;
-        let currentDifficulty = ws.difficulty || 1.0;
-
-        if (timeSinceLastSubmit >= TARGET_SHARE_TIME) {
-            const overdueRatio = timeSinceLastSubmit / TARGET_SHARE_TIME;
-            const adjustmentFactor = Math.max(1 / overdueRatio, 0.1);
-            currentDifficulty = currentDifficulty * adjustmentFactor;
-            needsNewJob = true;
-        } else if (ws.minerId && minerData[ws.minerId]) {
-            const data = minerData[ws.minerId];
-            if (data.rollingSubmissionTimes.length >= 3) {
-                const avgTime = data.rollingSubmissionTimes.reduce((a, b) => a + b, 0) / data.rollingSubmissionTimes.length;
-                
-                if (avgTime < PROACTIVE_FAST_THRESHOLD) {
-                    const adjustmentFactor = Math.min(TARGET_SHARE_TIME / avgTime, 3);
-                    currentDifficulty = currentDifficulty * adjustmentFactor;
-                    needsNewJob = true;
-                } else if (avgTime > TARGET_SHARE_TIME * 1.5) {
-                    const adjustmentFactor = Math.max(TARGET_SHARE_TIME / avgTime, 0.25);
-                    currentDifficulty = currentDifficulty * adjustmentFactor;
-                    needsNewJob = true;
-                }
+    if (timeSinceLastSubmit >= TARGET_SHARE_TIME) {
+        const overdueRatio = timeSinceLastSubmit / TARGET_SHARE_TIME;
+        const adjustmentFactor = Math.max(1 / overdueRatio, 0.1);
+        currentDifficulty = currentDifficulty * adjustmentFactor;
+        needsNewJob = true;
+    } else if (ws.minerId && minerData[ws.minerId]) {
+        const data = minerData[ws.minerId];
+        if (data.rollingSubmissionTimes.length >= 3) {
+            const avgTime = data.rollingSubmissionTimes.reduce((a, b) => a + b, 0) / data.rollingSubmissionTimes.length;
+            
+            if (avgTime < PROACTIVE_FAST_THRESHOLD) {
+                const adjustmentFactor = Math.min(TARGET_SHARE_TIME / avgTime, 3);
+                currentDifficulty = currentDifficulty * adjustmentFactor;
+                needsNewJob = true;
+            } else if (avgTime > TARGET_SHARE_TIME * 1.5) {
+                const adjustmentFactor = Math.max(TARGET_SHARE_TIME / avgTime, 0.25);
+                currentDifficulty = currentDifficulty * adjustmentFactor;
+                needsNewJob = true;
             }
         }
+    }
 
-        if (needsNewJob) {
-            currentDifficulty = Math.min(currentDifficulty, blockDifficulty);
-            currentDifficulty = Math.max(currentDifficulty, 1);
-            ws.difficulty = currentDifficulty;
-            sendJobCallback(ws);
-        }
-    });
+    if (needsNewJob) {
+        currentDifficulty = Math.min(currentDifficulty, blockDifficulty);
+        currentDifficulty = Math.max(currentDifficulty, 1);
+        ws.difficulty = currentDifficulty;
+        sendJobCallback(ws);
+    }
 };
 
 const minerLeft = (minerId) => {
@@ -140,4 +135,4 @@ const resetInvalidShareCount = (minerId) => {
     }
 };
 
-module.exports = { adjustDifficulty, minerLeft, trackShareIssued, periodicDifficultyCheck, trackInvalidShare, resetInvalidShareCount };
+module.exports = { adjustDifficulty, minerLeft, trackShareIssued, periodicDifficultyCheckForUser, trackInvalidShare, resetInvalidShareCount };

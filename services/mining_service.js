@@ -1,5 +1,5 @@
 const WebSocket = require('ws');
-const { adjustDifficulty, minerLeft, trackShareIssued, periodicDifficultyCheck, trackInvalidShare, resetInvalidShareCount } = require('./difficulty_adjustment_service');
+const { adjustDifficulty, minerLeft, trackShareIssued, trackInvalidShare, resetInvalidShareCount, periodicDifficultyCheckForUser } = require('./difficulty_adjustment_service');
 const { generateJob, extractBlockHexToNBits } = require('./share_construction_service');
 const { initDB, banIp, isIpBanned, saveShare } = require('./db_service');
 const shaicoin_service = require('./shaicoin_service')
@@ -8,13 +8,20 @@ const addon = require('../build/Release/addon');
 var current_raw_block = null
 var block_data = null
 var gwss = null
-var difficultyCheckInterval = null
 var balanceInterval = null
 var isShuttingDown = false
 
 const MAX_MESSAGE_SIZE = 10000
 
+const clearUserDifficultyTimer = (ws) => {
+    if (ws.difficultyCheckTimer) {
+        clearTimeout(ws.difficultyCheckTimer);
+        ws.difficultyCheckTimer = null;
+    }
+};
+
 const closeConnection = (ws, reason = 'Bye.') => {
+    clearUserDifficultyTimer(ws);
     if (isShuttingDown) {
         ws.close(1001, 'Server shutting down');
     } else {
@@ -42,6 +49,24 @@ const getIpAddress = (ws) => {
 function isHexOrAlphabet(str) {
     return /^[0-9a-fA-FA-Za-z]+$/.test(str);
 }
+
+const startUserDifficultyTimer = (ws) => {
+    clearUserDifficultyTimer(ws);
+    if (isShuttingDown) return;
+    ws.difficultyCheckTimer = setTimeout(() => {
+        ws.difficultyCheckTimer = null;
+        if (isShuttingDown) return;
+        if (ws.readyState !== ws.OPEN) return;
+        try {
+            if (current_raw_block) {
+                periodicDifficultyCheckForUser(ws, sendJobToWS, `0x${current_raw_block.nbits}`);
+            }
+            startUserDifficultyTimer(ws);
+        } catch (err) {
+            console.error('Error in difficulty check timer:', err);
+        }
+    }, 30000);
+};
 
 const sendJobToWS = (ws) => {
     if (ws.readyState === ws.OPEN && block_data && current_raw_block) {
@@ -72,6 +97,9 @@ const distributeJobs = () => {
 
     gwss.clients.forEach((ws) => {
         sendJobToWS(ws)
+        if (!ws.difficultyCheckTimer) {
+            startUserDifficultyTimer(ws);
+        }
     });
 };
 
@@ -165,6 +193,7 @@ const handleShareSubmission = async (data, ws) => {
         ws.lastSubmitTime = Date.now();
         await adjustDifficulty(miner_id, ws, `0x${current_raw_block.nbits}`);
 
+        startUserDifficultyTimer(ws);
         sendJobToWS(ws);
     } catch (error) {
         if (isShuttingDown) return;
@@ -262,6 +291,7 @@ const startMiningService = async (port) => {
 
         if (block_data && current_raw_block) {
             sendJobToWS(ws)
+            startUserDifficultyTimer(ws);
         }
         global.totalMiners += 1;
 
@@ -298,6 +328,7 @@ const startMiningService = async (port) => {
         });
 
         ws.on('close', () => {
+            clearUserDifficultyTimer(ws);
             if(ws.minerId) {
                 minerLeft(ws.minerId)
             }
@@ -316,12 +347,6 @@ const startMiningService = async (port) => {
         }
     }
     
-    difficultyCheckInterval = setInterval(() => {
-        if (current_raw_block) {
-            periodicDifficultyCheck(gwss, sendJobToWS, `0x${current_raw_block.nbits}`);
-        }
-    }, 30000);
-
     await shaicoin_service.sendBalanceToMiners()
     balanceInterval = setInterval(shaicoin_service.sendBalanceToMiners, 30 * 60 * 1000);
 
@@ -333,9 +358,10 @@ const shutdownMiningService = () => {
     console.log('Shutting down mining service...');
     isShuttingDown = true;
     
-    if (difficultyCheckInterval) {
-        clearInterval(difficultyCheckInterval);
-        difficultyCheckInterval = null;
+    if (gwss) {
+        gwss.clients.forEach((ws) => {
+            clearUserDifficultyTimer(ws);
+        });
     }
     
     if (balanceInterval) {
