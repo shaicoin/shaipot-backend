@@ -329,18 +329,16 @@ function satoshisToBitcoin(satoshis) {
     return `${integerPart.toString()}.${decimalPartStr}`;
 }
 
-async function getFeeRateInSatPerVByte(confirmationTarget = 6, wallet = null) {
+async function getFeeRateInBtcPerKb(confirmationTarget = 6, wallet = null) {
+    const MIN_FEE_RATE_BTC_KB = 0.0001;
     try {
         const feeEstimate = await rpcCall('estimatesmartfee', [confirmationTarget], wallet);
-        
-        if (feeEstimate.feerate) {
-            const feeRateSatsPerVByte = Math.ceil((feeEstimate.feerate * 1e8) / 1000);
-            return Math.max(feeRateSatsPerVByte / 1000, 1);
-        } else {
-            return 1;
+        if (feeEstimate && feeEstimate.feerate) {
+            return Math.max(feeEstimate.feerate, MIN_FEE_RATE_BTC_KB);
         }
+        return MIN_FEE_RATE_BTC_KB;
     } catch (error) {
-        return 1;
+        return MIN_FEE_RATE_BTC_KB;
     }
 }
 
@@ -362,10 +360,10 @@ async function createAndSendTransaction(outputs, wallet = null, confirmationTarg
         }
 
         const rawTx = await rpcCall('createrawtransaction', [[], formattedOutputs], wallet);
-        const feeRateSatsPerVByte = await getFeeRateInSatPerVByte(confirmationTarget, wallet);
+        const feeRateBtcPerKb = await getFeeRateInBtcPerKb(confirmationTarget, wallet);
 
         const options = {
-            fee_rate: feeRateSatsPerVByte,
+            feeRate: feeRateBtcPerKb,
             replaceable: false
         };
 
