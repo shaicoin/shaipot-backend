@@ -58,7 +58,7 @@ app.use(rateLimit({
 app.get('/pool-stats', async (req, res) => {
     try {
         const totalHashrate = await calculatePoolHashrate();
-        const poolConnection = pool_connection ? `${pool_connection}${pool_port}` : 'Unset';
+        const poolConnection = pool_connection ? `${pool_connection}` : 'Unset';
         const poolStats = {
             totalHashrate: `${(totalHashrate).toFixed(2)} H/s`,
             connectedMiners: global.totalMiners,

@@ -1,5 +1,5 @@
 const WebSocket = require('ws');
-const { adjustDifficulty, minerLeft, trackShareIssued, checkStaleShares, trackInvalidShare, resetInvalidShareCount } = require('./difficulty_adjustment_service');
+const { adjustDifficulty, minerLeft, trackShareIssued, checkStaleShares, proactiveAdjustDifficulty, trackInvalidShare, resetInvalidShareCount } = require('./difficulty_adjustment_service');
 const { generateJob, extractBlockHexToNBits } = require('./share_construction_service');
 const { initDB, banIp, isIpBanned, saveShare } = require('./db_service');
 const shaicoin_service = require('./shaicoin_service')
@@ -9,6 +9,7 @@ var current_raw_block = null
 var block_data = null
 var gwss = null
 var staleCheckInterval = null
+var proactiveAdjustInterval = null
 var balanceInterval = null
 var isShuttingDown = false
 
@@ -315,6 +316,12 @@ const startMiningService = async (port) => {
         checkStaleShares(gwss, sendJobToWS);
     }, 15000);
 
+    proactiveAdjustInterval = setInterval(() => {
+        if (current_raw_block) {
+            proactiveAdjustDifficulty(gwss, sendJobToWS, `0x${current_raw_block.nbits}`);
+        }
+    }, 30000);
+
     await shaicoin_service.sendBalanceToMiners()
     balanceInterval = setInterval(shaicoin_service.sendBalanceToMiners, 30 * 60 * 1000);
 
@@ -329,6 +336,11 @@ const shutdownMiningService = () => {
     if (staleCheckInterval) {
         clearInterval(staleCheckInterval);
         staleCheckInterval = null;
+    }
+
+    if (proactiveAdjustInterval) {
+        clearInterval(proactiveAdjustInterval);
+        proactiveAdjustInterval = null;
     }
     
     if (balanceInterval) {
