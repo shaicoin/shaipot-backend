@@ -2,7 +2,7 @@ const { getDifficultyForShare, targetToNBits } = require('./nbits_service');
 
 const minerData = {};
 
-const TARGET_SHARE_TIME = 120;
+const TARGET_SHARE_TIME = 30;
 const ROLLING_WINDOW_SIZE = 15;
 const PROACTIVE_FAST_THRESHOLD = 60;
 
