@@ -80,13 +80,23 @@ const distributeJobs = () => {
 };
 
 const handleShareSubmission = async (data, ws) => {
+    if (isShuttingDown) {
+        return;
+    }
+    
     const { miner_id, nonce, job_id, path: minerPath } = data;
 
     if (!ws.minerId) {
-        var isValid = await shaicoin_service.validateAddress(miner_id);
-        if(isValid) {
-            ws.minerId = miner_id;
-        } else {
+        try {
+            var isValid = await shaicoin_service.validateAddress(miner_id);
+            if(isValid) {
+                ws.minerId = miner_id;
+            } else {
+                closeConnection(ws);
+                return;
+            }
+        } catch {
+            if (isShuttingDown) return;
             closeConnection(ws);
             return;
         }
@@ -157,6 +167,7 @@ const handleShareSubmission = async (data, ws) => {
 
         sendJobToWS(ws);
     } catch (error) {
+        if (isShuttingDown) return;
         console.error('Error processing share:', error);
         ws.send(JSON.stringify({ type: 'rejected' }));
     }
@@ -336,7 +347,12 @@ const shutdownMiningService = () => {
     console.log('Mining service shutdown complete.');
 };
 
+const beginShutdown = () => {
+    isShuttingDown = true;
+};
+
 module.exports = {
     startMiningService,
-    shutdownMiningService
+    shutdownMiningService,
+    beginShutdown
 };

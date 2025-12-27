@@ -4,7 +4,7 @@ global.totalMiners = 0
 
 const express = require('express');
 const rateLimit = require('express-rate-limit');
-const { startMiningService, shutdownMiningService } = require('./services/mining_service');
+const { startMiningService, shutdownMiningService, beginShutdown } = require('./services/mining_service');
 const { shutdownShaicoinService, getRecentBlocks } = require('./services/shaicoin_service');
 const { calculatePoolHashrate, getMinerBalance, getRecentShares, shutdownDB } = require('./services/db_service');
 const { withdraw_threshold, fee_percentage_outof1000, pool_port, web_port, pool_mining_address, pool_connection } = require('./config.json')
@@ -127,6 +127,7 @@ const gracefulShutdown = async (signal) => {
         return;
     }
     isShuttingDown = true;
+    beginShutdown();
     
     console.log(`\n${signal} received. Starting graceful shutdown...`);
     
