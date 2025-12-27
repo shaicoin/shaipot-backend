@@ -4,7 +4,7 @@ const minerData = {};
 
 const TARGET_SHARE_TIME = 30;
 const ROLLING_WINDOW_SIZE = 15;
-const PROACTIVE_FAST_THRESHOLD = 60;
+const PROACTIVE_FAST_THRESHOLD = 20;
 
 const PID_KP = 0.1;
 const PID_KI = 0.01;
