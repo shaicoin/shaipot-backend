@@ -304,7 +304,7 @@ const startMiningService = async (port) => {
         if (current_raw_block) {
             periodicDifficultyCheck(gwss, sendJobToWS, `0x${current_raw_block.nbits}`);
         }
-    }, 10000);
+    }, 30000);
 
     await shaicoin_service.sendBalanceToMiners()
     balanceInterval = setInterval(shaicoin_service.sendBalanceToMiners, 30 * 60 * 1000);
