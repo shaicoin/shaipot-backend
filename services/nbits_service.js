@@ -1,6 +1,6 @@
 const BN = require('bn.js');
 
-const maxTarget = new BN('07ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', 16);
+const maxTarget = new BN('007fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', 16);
 
 const _targetToNBits = (target) => {
     const targetHex = target.toString(16).padStart(64, '0');
