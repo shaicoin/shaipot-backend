@@ -60,22 +60,21 @@ function satoshisToBitcoin(satoshis) {
     return `${integerPart.toString()}.${decimalPartStr}`;
 }
 
-async function getFeeRateInSatPerVByte(confirmationTarget = 6, wallet = null) {
-    const MIN_FEE_RATE = 10;
+async function getFeeRateInBtcPerKb(confirmationTarget = 6, wallet = null) {
+    const MIN_FEE_RATE_BTC_KB = 0.0001;
     try {
         const feeEstimate = await rpcCall('estimatesmartfee', [confirmationTarget], wallet);
         console.log(`  estimatesmartfee result: ${JSON.stringify(feeEstimate)}`);
         if (feeEstimate && feeEstimate.feerate) {
-            const feeRateSatsPerVByte = Math.ceil((feeEstimate.feerate * 1e8) / 1000);
-            const finalRate = Math.max(feeRateSatsPerVByte, MIN_FEE_RATE);
-            console.log(`  Using fee rate: ${finalRate} sat/vB`);
+            const finalRate = Math.max(feeEstimate.feerate, MIN_FEE_RATE_BTC_KB);
+            console.log(`  Using fee rate: ${finalRate} BTC/kB`);
             return finalRate;
         }
-        console.log(`  No fee estimate, using minimum: ${MIN_FEE_RATE} sat/vB`);
-        return MIN_FEE_RATE;
+        console.log(`  No fee estimate, using minimum: ${MIN_FEE_RATE_BTC_KB} BTC/kB`);
+        return MIN_FEE_RATE_BTC_KB;
     } catch (error) {
-        console.log(`  Fee estimation failed: ${error.message}, using minimum: ${MIN_FEE_RATE} sat/vB`);
-        return MIN_FEE_RATE;
+        console.log(`  Fee estimation failed: ${error.message}, using minimum: ${MIN_FEE_RATE_BTC_KB} BTC/kB`);
+        return MIN_FEE_RATE_BTC_KB;
     }
 }
 
@@ -95,10 +94,10 @@ async function createAndSendTransaction(outputsMap, wallet = null, confirmationT
     const rawTx = await rpcCall('createrawtransaction', [[], formattedOutputs], wallet);
     
     console.log('  Getting fee rate...');
-    const feeRateSatsPerVByte = await getFeeRateInSatPerVByte(confirmationTarget, wallet);
+    const feeRateBtcPerKb = await getFeeRateInBtcPerKb(confirmationTarget, wallet);
 
     const options = {
-        fee_rate: feeRateSatsPerVByte,
+        feeRate: feeRateBtcPerKb,
         replaceable: false
     };
 
