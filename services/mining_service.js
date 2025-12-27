@@ -111,15 +111,16 @@ const handleShareSubmission = async (data, ws) => {
         ws.jobOrder = [];
     }
 
-    const matchingJob = ws.jobBuffer.get(job_id);
+    const jobIdStr = String(job_id);
+    const matchingJob = ws.jobBuffer.get(jobIdStr);
     
     if (!matchingJob) {
         ws.send(JSON.stringify({ type: 'rejected', message: 'Job ID mismatch' }));
         return;
     }
 
-    ws.jobBuffer.delete(job_id);
-    const idx = ws.jobOrder.indexOf(job_id);
+    ws.jobBuffer.delete(jobIdStr);
+    const idx = ws.jobOrder.indexOf(jobIdStr);
     if (idx > -1) ws.jobOrder.splice(idx, 1);
 
     try {
