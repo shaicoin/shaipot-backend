@@ -337,9 +337,6 @@ const shutdownMiningService = () => {
     }
     
     if (gwss) {
-        gwss.clients.forEach((ws) => {
-            ws.close(1001, 'Server shutting down');
-        });
         gwss.close();
         gwss = null;
     }
