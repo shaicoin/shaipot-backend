@@ -45,7 +45,7 @@ function isHexOrAlphabet(str) {
 }
 
 const sendJobToWS = (ws) => {
-    if (ws.readyState === ws.OPEN) {
+    if (ws.readyState === ws.OPEN && block_data && current_raw_block) {
         const job = generateJob(ws, block_data, current_raw_block.nbits);
         
         if (!ws.jobBuffer) {
@@ -79,6 +79,12 @@ const distributeJobs = () => {
     }
 
     gwss.clients.forEach((ws) => {
+        if (ws.jobBuffer) {
+            ws.jobBuffer.clear();
+        }
+        if (ws.jobOrder) {
+            ws.jobOrder.length = 0;
+        }
         sendJobToWS(ws)
     });
 };
@@ -262,7 +268,9 @@ const startMiningService = async (port) => {
             }
         }
 
-        sendJobToWS(ws)
+        if (block_data && current_raw_block) {
+            sendJobToWS(ws)
+        }
         global.totalMiners += 1;
 
         ws.on('message', async (message) => {
@@ -327,7 +335,7 @@ const startMiningService = async (port) => {
         if (current_raw_block) {
             periodicDifficultyCheck(gwss, sendJobToWS, `0x${current_raw_block.nbits}`);
         }
-    }, 30000);
+    }, 10000);
 
     await shaicoin_service.sendBalanceToMiners()
     balanceInterval = setInterval(shaicoin_service.sendBalanceToMiners, 30 * 60 * 1000);
