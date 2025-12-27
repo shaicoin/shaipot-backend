@@ -61,10 +61,10 @@ const startUserDifficultyTimer = (ws) => {
             if (current_raw_block) {
                 periodicDifficultyCheckForUser(ws, sendJobToWS, `0x${current_raw_block.nbits}`);
             }
-            startUserDifficultyTimer(ws);
         } catch (err) {
             console.error('Error in difficulty check timer:', err);
         }
+        startUserDifficultyTimer(ws);
     }, 30000);
 };
 
