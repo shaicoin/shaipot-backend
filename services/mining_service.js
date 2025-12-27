@@ -14,6 +14,7 @@ var balanceInterval = null
 var isShuttingDown = false
 
 const MAX_MESSAGE_SIZE = 10000
+const JOB_BUFFER_SIZE = 10
 
 const closeConnection = (ws, reason = 'Bye.') => {
     if (isShuttingDown) {
@@ -49,13 +50,16 @@ const sendJobToWS = (ws) => {
         const job = generateJob(ws, block_data, current_raw_block.nbits);
         
         if (!ws.jobBuffer) {
-            ws.jobBuffer = [];
+            ws.jobBuffer = new Map();
+            ws.jobOrder = [];
         }
         
-        ws.jobBuffer.push(job);
+        ws.jobBuffer.set(job.jobId, { data: job.data, target: job.target });
+        ws.jobOrder.push(job.jobId);
         
-        if (ws.jobBuffer.length > 2) {
-            ws.jobBuffer.shift();
+        while (ws.jobOrder.length > JOB_BUFFER_SIZE) {
+            const oldId = ws.jobOrder.shift();
+            ws.jobBuffer.delete(oldId);
         }
         
         if (ws.minerId) {
@@ -104,17 +108,20 @@ const handleShareSubmission = async (data, ws) => {
     }
 
     if (!ws.jobBuffer) {
-        ws.jobBuffer = [];
+        ws.jobBuffer = new Map();
+        ws.jobOrder = [];
     }
 
-    const matchingJob = ws.jobBuffer.find(job => job.jobId === job_id);
+    const matchingJob = ws.jobBuffer.get(job_id);
     
     if (!matchingJob) {
         ws.send(JSON.stringify({ type: 'rejected', message: 'Job ID mismatch' }));
         return;
     }
 
-    ws.jobBuffer = ws.jobBuffer.filter(job => job.jobId !== job_id);
+    ws.jobBuffer.delete(job_id);
+    const idx = ws.jobOrder.indexOf(job_id);
+    if (idx > -1) ws.jobOrder.splice(idx, 1);
 
     try {
         var isAFrog = false
@@ -294,11 +301,14 @@ const startMiningService = async (port) => {
                 minerLeft(ws.minerId)
             }
             if (ws.jobBuffer) {
-                delete ws.jobBuffer;
+                ws.jobBuffer.clear();
+                ws.jobBuffer = null;
             }
-            if (ws.difficulty) {
-                delete ws.difficulty;
+            if (ws.jobOrder) {
+                ws.jobOrder.length = 0;
+                ws.jobOrder = null;
             }
+            ws.difficulty = null;
             global.totalMiners -= 1;
             ws.removeAllListeners('message');
         });

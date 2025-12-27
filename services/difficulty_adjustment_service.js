@@ -92,7 +92,10 @@ const checkStaleShares = (wss, sendJobCallback) => {
             data.lastShareTimestamp = now;
             
             if (ws.jobBuffer) {
-                ws.jobBuffer.forEach(job => job.jobId = -1);
+                ws.jobBuffer.clear();
+            }
+            if (ws.jobOrder) {
+                ws.jobOrder.length = 0;
             }
             
             sendJobCallback(ws);
@@ -154,7 +157,10 @@ const proactiveAdjustDifficulty = (wss, sendJobCallback, blockNBits) => {
             data.lastProactiveAdjust = now;
             
             if (ws.jobBuffer) {
-                ws.jobBuffer.forEach(job => job.jobId = -1);
+                ws.jobBuffer.clear();
+            }
+            if (ws.jobOrder) {
+                ws.jobOrder.length = 0;
             }
             
             sendJobCallback(ws);
