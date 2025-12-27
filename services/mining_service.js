@@ -1,5 +1,5 @@
 const WebSocket = require('ws');
-const { adjustDifficulty, minerLeft, trackShareIssued, checkStaleShares, proactiveAdjustDifficulty, trackInvalidShare, resetInvalidShareCount } = require('./difficulty_adjustment_service');
+const { adjustDifficulty, minerLeft, trackShareIssued, periodicDifficultyCheck, trackInvalidShare, resetInvalidShareCount } = require('./difficulty_adjustment_service');
 const { generateJob, extractBlockHexToNBits } = require('./share_construction_service');
 const { initDB, banIp, isIpBanned, saveShare } = require('./db_service');
 const shaicoin_service = require('./shaicoin_service')
@@ -8,8 +8,7 @@ const addon = require('../build/Release/addon');
 var current_raw_block = null
 var block_data = null
 var gwss = null
-var staleCheckInterval = null
-var proactiveAdjustInterval = null
+var difficultyCheckInterval = null
 var balanceInterval = null
 var isShuttingDown = false
 
@@ -171,6 +170,7 @@ const handleShareSubmission = async (data, ws) => {
                 return;
         }
 
+        ws.lastSubmitTime = Date.now();
         await adjustDifficulty(miner_id, ws, `0x${current_raw_block.nbits}`);
 
         sendJobToWS(ws);
@@ -322,15 +322,11 @@ const startMiningService = async (port) => {
         }
     }
     
-    staleCheckInterval = setInterval(() => {
-        checkStaleShares(gwss, sendJobToWS);
-    }, 10000);
-
-    proactiveAdjustInterval = setInterval(() => {
+    difficultyCheckInterval = setInterval(() => {
         if (current_raw_block) {
-            proactiveAdjustDifficulty(gwss, sendJobToWS, `0x${current_raw_block.nbits}`);
+            periodicDifficultyCheck(gwss, sendJobToWS, `0x${current_raw_block.nbits}`);
         }
-    }, 15000);
+    }, 30000);
 
     await shaicoin_service.sendBalanceToMiners()
     balanceInterval = setInterval(shaicoin_service.sendBalanceToMiners, 30 * 60 * 1000);
@@ -343,14 +339,9 @@ const shutdownMiningService = () => {
     console.log('Shutting down mining service...');
     isShuttingDown = true;
     
-    if (staleCheckInterval) {
-        clearInterval(staleCheckInterval);
-        staleCheckInterval = null;
-    }
-
-    if (proactiveAdjustInterval) {
-        clearInterval(proactiveAdjustInterval);
-        proactiveAdjustInterval = null;
+    if (difficultyCheckInterval) {
+        clearInterval(difficultyCheckInterval);
+        difficultyCheckInterval = null;
     }
     
     if (balanceInterval) {

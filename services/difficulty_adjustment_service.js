@@ -3,9 +3,7 @@ const { getDifficultyForShare, targetToNBits } = require('./nbits_service');
 const minerData = {};
 
 const TARGET_SHARE_TIME = 120;
-const SHARE_EXPIRATION_TIME = 90;
 const ROLLING_WINDOW_SIZE = 15;
-const PROACTIVE_CHECK_THRESHOLD = 150;
 const PROACTIVE_FAST_THRESHOLD = 60;
 
 const PID_KP = 0.1;
@@ -74,77 +72,44 @@ const trackShareIssued = (minerId) => {
     minerData[minerId].shareIssuedTimestamp = Date.now();
 };
 
-const checkStaleShares = (wss, sendJobCallback) => {
-    const now = Date.now();
-    
-    wss.clients.forEach((ws) => {
-        if (!ws.minerId || !minerData[ws.minerId]) {
-            return;
-        }
-
-        const data = minerData[ws.minerId];
-        const timeSinceLastSubmission = (now - data.lastShareTimestamp) / 1000;
-
-        if (timeSinceLastSubmission > SHARE_EXPIRATION_TIME && ws.readyState === ws.OPEN) {
-            const currentDifficulty = ws.difficulty || 1.0;
-            const overdueRatio = timeSinceLastSubmission / TARGET_SHARE_TIME;
-            const adjustmentFactor = Math.max(1 / overdueRatio, 0.1);
-            ws.difficulty = Math.max(currentDifficulty * adjustmentFactor, 1);
-            
-            data.lastShareTimestamp = now;
-            
-            if (ws.jobBuffer) {
-                ws.jobBuffer.clear();
-            }
-            if (ws.jobOrder) {
-                ws.jobOrder.length = 0;
-            }
-            
-            sendJobCallback(ws);
-        }
-    });
-};
-
-const proactiveAdjustDifficulty = (wss, sendJobCallback, blockNBits) => {
+const periodicDifficultyCheck = (wss, sendJobCallback, blockNBits) => {
     if (!blockNBits) return;
     
     const blockDifficulty = getDifficultyForShare(blockNBits);
     const now = Date.now();
 
     wss.clients.forEach((ws) => {
-        if (!ws.minerId || ws.readyState !== ws.OPEN) {
+        if (ws.readyState !== ws.OPEN) {
             return;
         }
 
-        if (!minerData[ws.minerId]) {
-            minerData[ws.minerId] = initializeMinerData();
-            return;
+        if (!ws.lastSubmitTime) {
+            ws.lastSubmitTime = now;
         }
 
-        const data = minerData[ws.minerId];
-        const timeSinceLastSubmission = (now - data.lastShareTimestamp) / 1000;
-        const timeSinceLastProactive = (now - data.lastProactiveAdjust) / 1000;
-
+        const timeSinceLastSubmit = (now - ws.lastSubmitTime) / 1000;
         let needsNewJob = false;
         let currentDifficulty = ws.difficulty || 1.0;
 
-        if (timeSinceLastSubmission > PROACTIVE_CHECK_THRESHOLD) {
-            const overdueRatio = timeSinceLastSubmission / TARGET_SHARE_TIME;
+        if (timeSinceLastSubmit >= TARGET_SHARE_TIME) {
+            const overdueRatio = timeSinceLastSubmit / TARGET_SHARE_TIME;
             const adjustmentFactor = Math.max(1 / overdueRatio, 0.1);
             currentDifficulty = currentDifficulty * adjustmentFactor;
-            data.lastShareTimestamp = now;
             needsNewJob = true;
-        } else if (timeSinceLastProactive >= 25 && data.rollingSubmissionTimes.length >= 3) {
-            const avgTime = data.rollingSubmissionTimes.reduce((a, b) => a + b, 0) / data.rollingSubmissionTimes.length;
-            
-            if (avgTime < PROACTIVE_FAST_THRESHOLD) {
-                const adjustmentFactor = Math.min(TARGET_SHARE_TIME / avgTime, 3);
-                currentDifficulty = currentDifficulty * adjustmentFactor;
-                needsNewJob = true;
-            } else if (avgTime > PROACTIVE_CHECK_THRESHOLD) {
-                const adjustmentFactor = Math.max(TARGET_SHARE_TIME / avgTime, 0.25);
-                currentDifficulty = currentDifficulty * adjustmentFactor;
-                needsNewJob = true;
+        } else if (ws.minerId && minerData[ws.minerId]) {
+            const data = minerData[ws.minerId];
+            if (data.rollingSubmissionTimes.length >= 3) {
+                const avgTime = data.rollingSubmissionTimes.reduce((a, b) => a + b, 0) / data.rollingSubmissionTimes.length;
+                
+                if (avgTime < PROACTIVE_FAST_THRESHOLD) {
+                    const adjustmentFactor = Math.min(TARGET_SHARE_TIME / avgTime, 3);
+                    currentDifficulty = currentDifficulty * adjustmentFactor;
+                    needsNewJob = true;
+                } else if (avgTime > TARGET_SHARE_TIME * 1.5) {
+                    const adjustmentFactor = Math.max(TARGET_SHARE_TIME / avgTime, 0.25);
+                    currentDifficulty = currentDifficulty * adjustmentFactor;
+                    needsNewJob = true;
+                }
             }
         }
 
@@ -152,7 +117,6 @@ const proactiveAdjustDifficulty = (wss, sendJobCallback, blockNBits) => {
             currentDifficulty = Math.min(currentDifficulty, blockDifficulty);
             currentDifficulty = Math.max(currentDifficulty, 1);
             ws.difficulty = currentDifficulty;
-            data.lastProactiveAdjust = now;
             
             if (ws.jobBuffer) {
                 ws.jobBuffer.clear();
@@ -184,4 +148,4 @@ const resetInvalidShareCount = (minerId) => {
     }
 };
 
-module.exports = { adjustDifficulty, minerLeft, trackShareIssued, checkStaleShares, proactiveAdjustDifficulty, trackInvalidShare, resetInvalidShareCount };
+module.exports = { adjustDifficulty, minerLeft, trackShareIssued, periodicDifficultyCheck, trackInvalidShare, resetInvalidShareCount };
