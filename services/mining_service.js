@@ -65,7 +65,7 @@ const startUserDifficultyTimer = (ws) => {
             console.error('Error in difficulty check timer:', err);
         }
         startUserDifficultyTimer(ws);
-    }, 30000);
+    }, 60000);
 };
 
 const sendJobToWS = (ws) => {
