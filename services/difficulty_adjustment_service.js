@@ -4,9 +4,12 @@ const minerData = {};
 
 const TARGET_SHARE_TIME = 30;
 const ROLLING_WINDOW_SIZE = 5;
+const BURST_WINDOW_SIZE = 3;
+const BURST_THRESHOLD = 10;
 const MAX_ADJUSTMENT_FACTOR = 2.0;
 const MIN_ADJUSTMENT_FACTOR = 0.5;
 const SMOOTHING_FACTOR = 0.3;
+const BURST_AGGRESSION = 0.7;
 
 const initializeMinerData = () => {
     return {
@@ -38,14 +41,23 @@ const adjustDifficulty = async (minerId, ws, blockNBits) => {
     }
     data.rollingSubmissionTimes.push(elapsedTime);
 
-    const avgElapsedTime = data.rollingSubmissionTimes.reduce((a, b) => a + b, 0) / data.rollingSubmissionTimes.length;
-
-    let targetRatio = TARGET_SHARE_TIME / avgElapsedTime;
-    targetRatio = Math.max(MIN_ADJUSTMENT_FACTOR, Math.min(MAX_ADJUSTMENT_FACTOR, targetRatio));
-
     let currentDifficulty = ws.difficulty || 1.0;
-    let adjustmentFactor = 1 + (targetRatio - 1) * SMOOTHING_FACTOR;
-    currentDifficulty = currentDifficulty * adjustmentFactor;
+    
+    const recentTimes = data.rollingSubmissionTimes.slice(-BURST_WINDOW_SIZE);
+    const recentAvg = recentTimes.reduce((a, b) => a + b, 0) / recentTimes.length;
+    
+    if (recentTimes.length >= BURST_WINDOW_SIZE && recentAvg < BURST_THRESHOLD) {
+        let burstRatio = TARGET_SHARE_TIME / recentAvg;
+        burstRatio = Math.min(burstRatio, 5.0);
+        let adjustmentFactor = 1 + (burstRatio - 1) * BURST_AGGRESSION;
+        currentDifficulty = currentDifficulty * adjustmentFactor;
+    } else {
+        const avgElapsedTime = data.rollingSubmissionTimes.reduce((a, b) => a + b, 0) / data.rollingSubmissionTimes.length;
+        let targetRatio = TARGET_SHARE_TIME / avgElapsedTime;
+        targetRatio = Math.max(MIN_ADJUSTMENT_FACTOR, Math.min(MAX_ADJUSTMENT_FACTOR, targetRatio));
+        let adjustmentFactor = 1 + (targetRatio - 1) * SMOOTHING_FACTOR;
+        currentDifficulty = currentDifficulty * adjustmentFactor;
+    }
 
     currentDifficulty = Math.min(currentDifficulty, blockDifficulty);
     currentDifficulty = Math.max(currentDifficulty, 1);
