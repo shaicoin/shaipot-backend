@@ -2,25 +2,19 @@ const { getDifficultyForShare, targetToNBits } = require('./nbits_service');
 
 const minerData = {};
 
-const TARGET_SHARE_TIME = 69;
-const ROLLING_WINDOW_SIZE = 15;
-const PROACTIVE_FAST_THRESHOLD = 40;
-
-const PID_KP = 0.1;
-const PID_KI = 0.01;
-const PID_KD = 0.05;
+const TARGET_SHARE_TIME = 30;
+const ROLLING_WINDOW_SIZE = 5;
+const MAX_ADJUSTMENT_FACTOR = 2.0;
+const MIN_ADJUSTMENT_FACTOR = 0.5;
+const SMOOTHING_FACTOR = 0.3;
 
 const initializeMinerData = () => {
     return {
         lastShareTimestamp: Date.now(),
         shareIssuedTimestamp: Date.now(),
-        pidState: {
-            integral: 0,
-            lastError: 0
-        },
         rollingSubmissionTimes: [],
         invalidShareCount: 0,
-        lastProactiveAdjust: Date.now()
+        lastAdjustmentTime: 0
     };
 };
 
@@ -30,13 +24,14 @@ const adjustDifficulty = async (minerId, ws, blockNBits) => {
 
     if (!minerData[minerId]) {
         minerData[minerId] = initializeMinerData();
+        minerData[minerId].lastShareTimestamp = now;
         return;
     }
 
     const data = minerData[minerId];
     const elapsedTime = (now - data.lastShareTimestamp) / 1000;
-
     data.lastShareTimestamp = now;
+    data.lastAdjustmentTime = now;
 
     if (data.rollingSubmissionTimes.length >= ROLLING_WINDOW_SIZE) {
         data.rollingSubmissionTimes.shift();
@@ -45,19 +40,12 @@ const adjustDifficulty = async (minerId, ws, blockNBits) => {
 
     const avgElapsedTime = data.rollingSubmissionTimes.reduce((a, b) => a + b, 0) / data.rollingSubmissionTimes.length;
 
-    const error = avgElapsedTime - TARGET_SHARE_TIME;
-
-    data.pidState.integral += error;
-
-    data.pidState.integral = Math.max(-100, Math.min(100, data.pidState.integral));
-
-    const derivative = error - data.pidState.lastError;
-    data.pidState.lastError = error;
-
-    const pidOutput = (PID_KP * error) + (PID_KI * data.pidState.integral) + (PID_KD * derivative);
+    let targetRatio = TARGET_SHARE_TIME / avgElapsedTime;
+    targetRatio = Math.max(MIN_ADJUSTMENT_FACTOR, Math.min(MAX_ADJUSTMENT_FACTOR, targetRatio));
 
     let currentDifficulty = ws.difficulty || 1.0;
-    currentDifficulty = currentDifficulty * (1 - pidOutput);
+    let adjustmentFactor = 1 + (targetRatio - 1) * SMOOTHING_FACTOR;
+    currentDifficulty = currentDifficulty * adjustmentFactor;
 
     currentDifficulty = Math.min(currentDifficulty, blockDifficulty);
     currentDifficulty = Math.max(currentDifficulty, 1);
@@ -81,40 +69,33 @@ const periodicDifficultyCheckForUser = (ws, sendJobCallback, blockNBits) => {
 
     if (!ws.lastSubmitTime) {
         ws.lastSubmitTime = now;
+        return;
     }
 
     const timeSinceLastSubmit = (now - ws.lastSubmitTime) / 1000;
-    let needsNewJob = false;
+
+    if (timeSinceLastSubmit < TARGET_SHARE_TIME) {
+        return;
+    }
+
     let currentDifficulty = ws.difficulty || 1.0;
+    const overdueRatio = timeSinceLastSubmit / TARGET_SHARE_TIME;
+    let adjustmentFactor = 1 / overdueRatio;
+    adjustmentFactor = Math.max(adjustmentFactor, MIN_ADJUSTMENT_FACTOR);
+    adjustmentFactor = 1 + (adjustmentFactor - 1) * SMOOTHING_FACTOR;
+    
+    currentDifficulty = currentDifficulty * adjustmentFactor;
+    currentDifficulty = Math.min(currentDifficulty, blockDifficulty);
+    currentDifficulty = Math.max(currentDifficulty, 1);
+    
+    ws.difficulty = currentDifficulty;
+    ws.lastSubmitTime = now;
 
-    if (timeSinceLastSubmit >= TARGET_SHARE_TIME) {
-        const overdueRatio = timeSinceLastSubmit / TARGET_SHARE_TIME;
-        const adjustmentFactor = Math.max(1 / overdueRatio, 0.1);
-        currentDifficulty = currentDifficulty * adjustmentFactor;
-        needsNewJob = true;
-    } else if (ws.minerId && minerData[ws.minerId]) {
-        const data = minerData[ws.minerId];
-        if (data.rollingSubmissionTimes.length >= 3) {
-            const avgTime = data.rollingSubmissionTimes.reduce((a, b) => a + b, 0) / data.rollingSubmissionTimes.length;
-            
-            if (avgTime < PROACTIVE_FAST_THRESHOLD) {
-                const adjustmentFactor = Math.min(TARGET_SHARE_TIME / avgTime, 3);
-                currentDifficulty = currentDifficulty * adjustmentFactor;
-                needsNewJob = true;
-            } else if (avgTime > TARGET_SHARE_TIME * 1.5) {
-                const adjustmentFactor = Math.max(TARGET_SHARE_TIME / avgTime, 0.25);
-                currentDifficulty = currentDifficulty * adjustmentFactor;
-                needsNewJob = true;
-            }
-        }
+    if (ws.minerId && minerData[ws.minerId]) {
+        minerData[ws.minerId].lastAdjustmentTime = now;
     }
 
-    if (needsNewJob) {
-        currentDifficulty = Math.min(currentDifficulty, blockDifficulty);
-        currentDifficulty = Math.max(currentDifficulty, 1);
-        ws.difficulty = currentDifficulty;
-        sendJobCallback(ws);
-    }
+    sendJobCallback(ws);
 };
 
 const minerLeft = (minerId) => {
